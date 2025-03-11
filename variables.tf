@@ -109,7 +109,7 @@ variable "security_tooling_account_id" {
   type        = string
   validation {
     condition = (
-      length(var.ami_owner_account) == 12
+      length(var.security_tooling_account_id) == 12
     )
     error_message = "The \"security_tooling_account_id\" must be a 12-character numeric string."
   }
