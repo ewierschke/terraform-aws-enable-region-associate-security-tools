@@ -1,11 +1,12 @@
 # terraform-aws-enable-region-associate-security-tools
 
-A Terraform module to ... when AWS accounts
-enable an opt-in region in an AWS Organization.
+A Terraform module to associate member account security tools to security tooling
+account when AWS accounts enable an opt-in region in an AWS Organization.
 
-The Lambda function is triggered for the account by an Event Rule that matches
-the ... EnableRegion ... events. The function then
-... for that account.
+The Lambda function is triggered for the member account by an Event Rule that 
+matches the 'Region Opt-In Status Change' events. The function then get 
+Organizations information for that member account and associates Inspector, 
+Detective, and Macie to the defined security tooling account.
 
 <!-- BEGIN TFDOCS -->
 ## Requirements
@@ -33,12 +34,16 @@ the ... EnableRegion ... events. The function then
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Project name to prefix resources with | `string` | n/a | yes |
-| <a name="input_assume_role_name"></a> [assume\_role\_name](#input\_assume\_role\_name) | Name of the IAM role that the lambda will assume in the target account | `string` | `"OrganizationAccountAccessRole"` | no |
+| <a name="input_security_tooling_account_id"></a> [security\_tooling\_account\_id](#input\_security\_tooling\_account\_id) | Security Tooling Account ID | `string` | n/a | yes |
+| <a name="input_assume_role_name"></a> [assume\_role\_name](#input\_assume\_role\_name) | Name of the IAM role that the lambda will assume in the security tooling account | `string` | `"OrganizationAccountAccessRole"` | no |
 | <a name="input_aws_sts_regional_endpoints"></a> [aws\_sts\_regional\_endpoints](#input\_aws\_sts\_regional\_endpoints) | Sets AWS STS endpoint resolution logic for boto3. | `string` | `"regional"` | no |
 | <a name="input_dry_run"></a> [dry\_run](#input\_dry\_run) | Boolean toggle to control the dry-run mode of the lambda function | `bool` | `true` | no |
+| <a name="input_enable_detective"></a> [enable\_detective](#input\_enable\_detective) | Boolean toggle to control whether to enable Detective | `bool` | `true` | no |
+| <a name="input_enable_inspector"></a> [enable\_inspector](#input\_enable\_inspector) | Boolean toggle to control whether to enable Inspector | `bool` | `true` | no |
+| <a name="input_enable_macie"></a> [enable\_macie](#input\_enable\_macie) | Boolean toggle to control whether to enable Macie | `bool` | `true` | no |
 | <a name="input_event_bus_name"></a> [event\_bus\_name](#input\_event\_bus\_name) | Event bus name to create event rules in | `string` | `"default"` | no |
-| <a name="input_event_types"></a> [event\_types](#input\_event\_types) | Event types that will trigger this lambda | `set(string)` | <pre>[<br/>  "CreateAccountResult",<br/>  "InviteAccountToOrganization",<br/>  "EnableOptInRegion"<br/>]</pre> | no |
-| <a name="input_lambda"></a> [lambda](#input\_lambda) | Object of optional attributes passed on to the lambda module | <pre>object({<br/>    artifacts_dir            = optional(string, "builds")<br/>    build_in_docker          = optional(bool, false)<br/>    create_package           = optional(bool, true)<br/>    ephemeral_storage_size   = optional(number)<br/>    ignore_source_code_hash  = optional(bool, true)<br/>    local_existing_package   = optional(string)<br/>    memory_size              = optional(number, 128)<br/>    recreate_missing_package = optional(bool, false)<br/>    runtime                  = optional(string, "python3.12")<br/>    s3_bucket                = optional(string)<br/>    s3_existing_package      = optional(map(string))<br/>    s3_prefix                = optional(string)<br/>    store_on_s3              = optional(bool, false)<br/>    timeout                  = optional(number, 300)<br/>  })</pre> | `{}` | no |
+| <a name="input_event_types"></a> [event\_types](#input\_event\_types) | Event types that will trigger this lambda | `set(string)` | <pre>[<br>  "EnableOptInRegion"<br>]</pre> | no |
+| <a name="input_lambda"></a> [lambda](#input\_lambda) | Object of optional attributes passed on to the lambda module | <pre>object({<br>    artifacts_dir            = optional(string, "builds")<br>    build_in_docker          = optional(bool, false)<br>    create_package           = optional(bool, true)<br>    ephemeral_storage_size   = optional(number)<br>    ignore_source_code_hash  = optional(bool, true)<br>    local_existing_package   = optional(string)<br>    memory_size              = optional(number, 128)<br>    recreate_missing_package = optional(bool, false)<br>    runtime                  = optional(string, "python3.12")<br>    s3_bucket                = optional(string)<br>    s3_existing_package      = optional(map(string))<br>    s3_prefix                = optional(string)<br>    store_on_s3              = optional(bool, false)<br>    timeout                  = optional(number, 300)<br>  })</pre> | `{}` | no |
 | <a name="input_log_level"></a> [log\_level](#input\_log\_level) | Log level for lambda | `string` | `"INFO"` | no |
 | <a name="input_max_workers"></a> [max\_workers](#input\_max\_workers) | Number of worker threads to use to process delete | `number` | `20` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags for resource | `map(string)` | `{}` | no |
