@@ -351,7 +351,7 @@ def cli_main(member_account_id, security_tooling_account_id, assume_role_arn=Non
     if SECURITY_TOOLING_ACCOUNT_ID:
         security_tooling_account_id = SECURITY_TOOLING_ACCOUNT_ID
 
-    main(member_account_id, security_tooling_account_id, assume_role_arn, regions=region)
+    main(member_account_id, security_tooling_account_id, assume_role_arn, regions=[region])
 
 
 def main(member_account_id, security_tooling_account_id, assume_role_arn, regions):
@@ -362,7 +362,8 @@ def main(member_account_id, security_tooling_account_id, assume_role_arn, region
     )
 
     """Use Organizations client to get account email address"""
-    org_client = SESSION.client("organizations", region_name=regions)
+
+    org_client = SESSION.client("organizations", region_name=regions[0])
     response = org_client.describe_account(
         AccountId=member_account_id
     )
@@ -370,7 +371,8 @@ def main(member_account_id, security_tooling_account_id, assume_role_arn, region
 
     assumed_role_session = get_assumed_role_session(security_tooling_account_id, assume_role_arn)
 
-    regions = regions or get_regions(assumed_role_session)
+    # regions = regions or get_regions(assumed_role_session)
+    regions = regions[0]
 
     exception_list = non_concurrently_associate_security_tools(
         assumed_role_session,
