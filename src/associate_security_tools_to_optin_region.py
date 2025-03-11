@@ -102,7 +102,7 @@ def lambda_handler(event, context):  # pylint: disable=unused-argument, too-many
         f"arn:{get_partition()}:iam::{SECURITY_TOOLING_ACCOUNT_ID}:role/{ASSUME_ROLE_NAME}"
     )
 
-    main(event_data["account_id"], assume_role_arn, event_data["regions"])
+    main(event_data["account_id"], SECURITY_TOOLING_ACCOUNT_ID, assume_role_arn, event_data["regions"])
 
 
 def get_enable_region_account_id(event):
