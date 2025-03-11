@@ -4,9 +4,27 @@ variable "project_name" {
 }
 
 variable "assume_role_name" {
-  description = "Name of the IAM role that the lambda will assume in the target account"
+  description = "Name of the IAM role that the lambda will assume in the security tooling account"
   type        = string
   default     = "OrganizationAccountAccessRole"
+}
+
+variable "enable_detective" {
+  description = "Boolean toggle to control whether to enable Detective"
+  type        = bool
+  default     = true
+}
+
+variable "enable_inspector" {
+  description = "Boolean toggle to control whether to enable Inspector"
+  type        = bool
+  default     = true
+}
+
+variable "enable_macie" {
+  description = "Boolean toggle to control whether to enable Macie"
+  type        = bool
+  default     = true
 }
 
 variable "event_bus_name" {
@@ -19,21 +37,17 @@ variable "event_types" {
   description = "Event types that will trigger this lambda"
   type        = set(string)
   default = [
-    # "CreateAccountResult",
-    # "InviteAccountToOrganization",
-    "EnableOptInRegion",
+    "EnableOptInRegion"
   ]
 
   validation {
     condition = alltrue([for event in var.event_types : contains(
       [
-        "CreateAccountResult",
-        "InviteAccountToOrganization",
         "EnableOptInRegion"
       ],
       event
     )])
-    error_message = "Supported event_types include only: CreateAccountResult, InviteAccountToOrganization, EnableOptInRegion"
+    error_message = "Supported event_types include only: EnableOptInRegion"
   }
 }
 
@@ -87,6 +101,17 @@ variable "aws_sts_regional_endpoints" {
   validation {
     condition     = contains(["regional", "legacy"], var.aws_sts_regional_endpoints)
     error_message = "Valid values for aws sts regional endpoints are (regional, legacy)."
+  }
+}
+
+variable "security_tooling_account_id" {
+  description = "Security Tooling Account ID"
+  type        = string
+  validation {
+    condition = (
+      length(var.ami_owner_account) == 12
+    )
+    error_message = "The \"security_tooling_account_id\" must be a 12-character numeric string."
   }
 }
 

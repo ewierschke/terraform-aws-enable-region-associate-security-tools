@@ -6,8 +6,8 @@ module "lambda" {
 
   function_name = "${var.project_name}-associate-security-tools"
 
-  description = "Associates security tools to defined resources, triggered by enable region account events"
-  handler     = "dont_delete_default_vpc.lambda_handler"
+  description = "Associates member account security tools to security tooling account, triggered by Region Opt-In Status Change account events"
+  handler     = "associate_security_tools_to_optin_region.lambda_handler"
   tags        = var.tags
 
   attach_policy_json = true
@@ -37,11 +37,15 @@ module "lambda" {
   ]
 
   environment_variables = {
-    LOG_LEVEL                  = var.log_level
-    ASSUME_ROLE_NAME           = var.assume_role_name
-    DRY_RUN                    = var.dry_run
-    MAX_WORKERS                = var.max_workers
-    AWS_STS_REGIONAL_ENDPOINTS = var.aws_sts_regional_endpoints
+    LOG_LEVEL                   = var.log_level
+    ASSUME_ROLE_NAME            = var.assume_role_name
+    ENABLE_INSPECTOR            = var.enable_inspector
+    ENABLE_DETECTIVE            = var.enable_detective
+    ENABLE_MACIE                = var.enable_macie
+    DRY_RUN                     = var.dry_run
+    MAX_WORKERS                 = var.max_workers
+    AWS_STS_REGIONAL_ENDPOINTS  = var.aws_sts_regional_endpoints
+    SECURITY_TOOLING_ACCOUNT_ID = var.security_tooling_account_id
   }
 }
 
@@ -61,32 +65,12 @@ data "aws_iam_policy_document" "lambda" {
 
 ##############################
 # Events
+# https://docs.aws.amazon.com/accounts/latest/reference/monitoring-eventbridge.html#application-auto-scaling-example-event-types
 ##############################
 locals {
   lambda_name = module.lambda.lambda_function_name
 
   event_types = {
-    # CreateAccountResult = jsonencode(
-    #   {
-    #     "detail" : {
-    #       "eventSource" : ["organizations.amazonaws.com"],
-    #       "eventName" : ["CreateAccountResult"]
-    #       "serviceEventDetails" : {
-    #         "createAccountStatus" : {
-    #           "state" : ["SUCCEEDED"]
-    #         }
-    #       }
-    #     }
-    #   }
-    # )
-    # InviteAccountToOrganization = jsonencode(
-    #   {
-    #     "detail" : {
-    #       "eventSource" : ["organizations.amazonaws.com"],
-    #       "eventName" : ["InviteAccountToOrganization"]
-    #     }
-    #   }
-    # )
     EnableOptInRegion = jsonencode(
       {
         "source" : ["aws.account"],
