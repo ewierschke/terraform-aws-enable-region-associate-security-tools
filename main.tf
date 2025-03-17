@@ -39,8 +39,9 @@ module "lambda" {
   environment_variables = {
     LOG_LEVEL                   = var.log_level
     ASSUME_ROLE_NAME            = var.assume_role_name
-    ENABLE_INSPECTOR            = var.enable_inspector
     ENABLE_DETECTIVE            = var.enable_detective
+    ENABLE_GUARDDUTY            = var.enable_guardduty
+    ENABLE_INSPECTOR            = var.enable_inspector
     ENABLE_MACIE                = var.enable_macie
     DRY_RUN                     = var.dry_run
     MAX_WORKERS                 = var.max_workers
@@ -76,7 +77,7 @@ locals {
         "source" : ["aws.account"],
         "detail-type" : ["Region Opt-In Status Change"],
         "detail" : {
-          "status" : ["Enabled"]
+          "status" : ["ENABLED"]
         }
       }
     )

@@ -21,5 +21,8 @@ __pycache__
 .python-version
 .pytest_cache
 
+# python venv
+venv/
+
 # lambda builds
 builds/

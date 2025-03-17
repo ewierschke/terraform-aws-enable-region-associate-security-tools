@@ -1,4 +1,0 @@
-aws-assume-role-lib
-boto3
-botocore
-click

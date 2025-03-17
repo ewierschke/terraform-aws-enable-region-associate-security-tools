@@ -1,11 +1,17 @@
-"""Associate member account security tools to Security Tooling Account for newly enabled opt-in region.
+"""Associate member account security tools to Security Tooling Account for 
+   specified region, or opt-in region provided by lambda event.
 
 Purpose:
-    In an AWS SRA Organizations environment, associate member account security tools
-    Detective, Inspector, and Macie to Security tooling account instances
-    Enabling Opt-In region after Security tooling account instances are created does not
-    currently allow automatically joining to tools as tool settings only apply to 
-    *new* organizations member accounts
+    In an AWS Security Reference Architecture (AWS SRA) environment utilizing
+    AWS Organizations, associates the provided member account security tools 
+    Detective, GuardDuty, Inspector, and Macie to the Security tooling account
+    service instances.
+    Enabling an Opt-In region after Security tooling account service instances 
+    are created does not currently allow automatically joining to tools, as tool
+    settings (except GuardDuty) only apply to *new* organizations member 
+    accounts.
+    Specify Environment variables to control which security tool service to 
+    enable or not.
 Permissions:
     ** Management Account (Executing Account)
     * organizations:DescribeAccount
@@ -13,6 +19,8 @@ Permissions:
     * detective:ListGraphs
     * detective:CreateMembers
     * detective:StartMonitoringMember
+    * guardduty:ListDetectors
+    * guardduty:CreateMembers
     * inspector2:AssociateMember
     * inspector2:Enable
     * macie2:CreateMember
@@ -20,11 +28,17 @@ Environment Variables:
     LOG_LEVEL: (optional): sets the level for function logging
             supported values:
             critical, error, warning, info (default)
-    DRY_RUN: (optional): true or false, defaults to true
-    sets whether the delete should be performed,
-    otherwise just log the actions that would be taken
+    ENABLE_DETECTIVE: true or false, defaults to true
+    sets whether detective should be enabled
+    ENABLE_GUARDDUTY: true or false, defaults to true
+    sets whether guardduty should be enabled
+    ENABLE_INSPECTOR: true or false, defaults to true
+    sets whether inspector should be enabled
+    ENABLE_MACIE: true or false, defaults to true
+    sets whether macie should be enabled
     ASSUME_ROLE_NAME: Name of role to assume
     MAX_WORKERS: (optional) # of workers to process resources, default 20
+    SECURITY_TOOLING_ACCOUNT_ID: required when running as lambda
 
 """
 
@@ -70,14 +84,12 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 ASSUME_ROLE_NAME = os.environ.get("ASSUME_ROLE_NAME", "OrganizationAccountAccessRole")
-#unused?
-DRY_RUN = os.environ.get("DRY_RUN", "true").lower() == "true"
 ENABLE_DETECTIVE = os.environ.get("ENABLE_DETECTIVE", 1)
+ENABLE_GUARDDUTY = os.environ.get("ENABLE_GUARDDUTY", 1)
 ENABLE_INSPECTOR = os.environ.get("ENABLE_INSPECTOR", 1)
 ENABLE_MACIE = os.environ.get("ENABLE_MACIE", 1)
-#unused?
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "20"))
-SECURITY_TOOLING_ACCOUNT_ID = os.environ.get("SECURITY_TOOLING_ACCOUNT_ID", "123456789012")
+SECURITY_TOOLING_ACCOUNT_ID = os.environ.get("SECURITY_TOOLING_ACCOUNT_ID")
 
 # Get the Lambda session in the lambda context
 SESSION = boto3.Session()
@@ -177,6 +189,8 @@ def get_tools_to_enable():
 
     if ENABLE_DETECTIVE:
         tools.append("detective")
+    if ENABLE_GUARDDUTY:
+        tools.append("guardduty")
     if ENABLE_INSPECTOR:
         tools.append("inspector")
     if ENABLE_MACIE:
@@ -193,15 +207,15 @@ def add_to_detective(acct, assumed_role_session):
     detective_client = assumed_role_session.client("detective", region_name=region)
     log.info("Getting existing detective graph for account: %s", acct["account_id"])
     graph_response = detective_client.list_graphs(
-            MaxResults=123
+            MaxResults=1
     )
-    log.info("Adding account %s to detective", acct["account_id"])
     log.info(graph_response)
-    graph_arn=graph_response["GraphList"]["Arn"]
-    create_member_response = detective_client.create_members(
+    graph_arn=graph_response["GraphList"][0]["Arn"]
+    log.info("Adding account %s to detective", acct["account_id"])
+    create_members_response = detective_client.create_members(
         GraphArn=graph_arn,
         Message='Lambda in Mgmt Acct Adding member to Detective Graph',
-        DisableEmailNotification=True,
+        DisableEmailNotification=False,
         Accounts=[
             {
                 'AccountId': acct["account_id"],
@@ -209,12 +223,36 @@ def add_to_detective(acct, assumed_role_session):
             },
         ]
     )
-    log.info(create_member_response)
+    log.info(create_members_response)
     start_monitoring_response = detective_client.start_monitoring_member(
         GraphArn=graph_arn,
         AccountId=acct["account_id"]
     )
     log.info(start_monitoring_response)
+
+
+def add_to_guardduty(acct, assumed_role_session):
+    """Add to GuardDuty."""
+    """Assumes only a single detector per region exists in security tooling account"""
+    region=acct["region"]
+    guardduty_client = assumed_role_session.client("guardduty", region_name=region)
+    log.info("Getting existing guardduty detector id for account: %s", acct["account_id"])
+    detector_response = guardduty_client.list_detectors(
+            MaxResults=1
+    )
+    log.info(detector_response)
+    detector_id=detector_response["DetectorIds"][0]
+    log.info("Adding account %s to guardduty", acct["account_id"])
+    create_members_response = guardduty_client.create_members(
+        DetectorId=detector_id,
+        AccountDetails=[
+            {
+                'AccountId': acct["account_id"],
+                'Email': acct["account_email"]
+            },
+        ]
+    )
+    log.info(create_members_response)
 
 
 def add_to_inspector(acct, assumed_role_session):
@@ -261,6 +299,7 @@ def account_associate_all_tools(account_id, account_email, security_tool, region
     """Do the work - order of operation.
 
     1.) try to add to detective
+    2.) try to add to guardduty
     2.) try to add to inspector
     3.) try to add to macie
 
@@ -272,7 +311,6 @@ def account_associate_all_tools(account_id, account_email, security_tool, region
         "account_id": account_id,
         "account_email": account_email,
         "region": region,
-        "session": assumed_role_session,
     }
 
     if security_tool == "detective":
@@ -281,6 +319,13 @@ def account_associate_all_tools(account_id, account_email, security_tool, region
         except BaseException as exc:  # pylint: disable=broad-except
             # Allow threads to continue on exception, but capture the error
             exception_list.append(process_tool_exception(acct, "add_to_detective", exc))
+
+    if security_tool == "guardduty":
+        try:
+            add_to_guardduty(acct, assumed_role_session)
+        except BaseException as exc:  # pylint: disable=broad-except
+            # Allow threads to continue on exception, but capture the error
+            exception_list.append(process_tool_exception(acct, "add_to_guardduty", exc))
 
     if security_tool == "inspector":
         try:
@@ -355,7 +400,7 @@ def cli_main(member_account_id, security_tooling_account_id, assume_role_arn=Non
 
 
 def main(member_account_id, security_tooling_account_id, assume_role_arn, regions):
-    """Assume role and non-concurrently enable security tools."""
+    """Assume role and *non-concurrently enable security tools."""
     log.debug(
         "Main identity is %s",
         SESSION.client("sts").get_caller_identity()["Arn"],
@@ -371,7 +416,6 @@ def main(member_account_id, security_tooling_account_id, assume_role_arn, region
 
     assumed_role_session = get_assumed_role_session(security_tooling_account_id, assume_role_arn)
 
-    # regions = regions or get_regions(assumed_role_session)
     regions = regions[0]
 
     exception_list = non_concurrently_associate_security_tools(
@@ -387,10 +431,7 @@ def main(member_account_id, security_tooling_account_id, assume_role_arn, region
         log.error(exception_str)
         raise AddSecurityToolError(Exception(exception_str))
 
-    if DRY_RUN:
-        log.debug("Dry Run listed all resources that would be deleted")
-    else:
-        log.debug("Added account to selected security tools")
+    log.debug("Added account to selected security tools")
 
 
 def non_concurrently_associate_security_tools(
@@ -400,14 +441,14 @@ def non_concurrently_associate_security_tools(
     regions,
 ):
     """Create worker threads and add security tools."""
-    """Security tools do not have resource clients to enable thread safety"""
+    """!!Security tools do not have resource clients to enable thread safety, so will not use executor"""
     exception_list = []
     futures = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             try:
                 tool_names = get_tools_to_enable()
             except BaseException as exc:  # pylint: disable=broad-except
-                # Allow threads to continue on exception, but capture the erro
+                # Allow threads to continue on exception, but capture the error
                 msg = "Error: Error getting tools to enable"
                 exception_list.append(
                     convert_tool_exception_to_string(
@@ -469,12 +510,13 @@ Supported Environment Variables:
     'LOG_LEVEL': defaults to 'info'
         - set the desired log level ('error', 'warning', 'info' or 'debug')
 
-    'DRY_RUN': defaults to 'true'
-        - set whether actions should be simulated or live
-        - value of 'true' (case insensitive) will be simulated.
-
     'MAX_WORKERS': defaults to '20'
         -sets max number of worker threads to run simultaneously.
+
+    'ENABLE_': 
+        - 
+
+        
 """,
         )
         required_args = parser.add_argument_group("required named arguments")

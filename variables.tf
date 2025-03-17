@@ -15,6 +15,12 @@ variable "enable_detective" {
   default     = true
 }
 
+variable "enable_guardduty" {
+  description = "Boolean toggle to control whether to enable GuardDuty"
+  type        = bool
+  default     = true
+}
+
 variable "enable_inspector" {
   description = "Boolean toggle to control whether to enable Inspector"
   type        = bool
